@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<launch>
+ <!-- recommend : launch is not that recommended. rather rosrun in each window for monitoring-->
+
+  <!-- vicon -->
+  <include file="$(find vicon_bridge)/launch/vicon.launch"/>
+  
+  <!--ZED-->
+  
+  <include file="$(find zed_wrapper)/launch/display.launch"/>
+  
+  <!--tf connecting btw vicon and zed camera-->
+  
+  <node name="connecting_tf" pkg="zed_tracking" type="connecting_tf_vicon_zed" output="screen"/>
+  
+  <!--octomap server -->
+  <include file="$(find octomap_server)/launch/octomap_tracking_server_zed.launch"/>
+  
+  </launch>
+  
