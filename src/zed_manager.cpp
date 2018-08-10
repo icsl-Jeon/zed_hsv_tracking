@@ -43,17 +43,12 @@
 
 #include <image_transport/image_transport.h>
 #include <sl/Camera.hpp>
-
 #include <string>
 
 using namespace cv;
 
 // global variables
 
-
-const char* src_window = "original image";
-
-const char* mask_window = "mask image";
 
 struct ThresHSV{
 
@@ -93,6 +88,9 @@ Mat slMat2cvMat(sl::Mat& input) {
     return  Mat(input.getHeight(), input.getWidth(), cv_type, input.getPtr<sl::uchar1>(sl::MEM_CPU));
 }
 
+/**
+* Conversion function between cv::Mat to ROSmsg
+**/
 
 sensor_msgs::ImagePtr imageToROSmsg(cv::Mat img, const std::string encodingType, std::string frameId, ros::Time t) {
     sensor_msgs::ImagePtr ptr = boost::make_shared<sensor_msgs::Image>();
@@ -205,7 +203,7 @@ int main(int argc, char ** argv){
         ZED_manager.publishRGB();
 
 
-//        ZED_manager.publishPointCloud();
+        ZED_manager.publishPointCloud();
 //        ROS_INFO("PCL published");
 
     }
@@ -227,7 +225,7 @@ void ZEDManager::retrieve() {
         imshow("img",rgb_raw);
         waitKey(10);
         // PCL
-    //    ZED.retrieveMeasure(cloud,sl::MEASURE_XYZ);
+        ZED.retrieveMeasure(cloud,sl::MEASURE_XYZ);
     }
     else
         ROS_WARN("zed grab error");
@@ -237,12 +235,13 @@ void ZEDManager::retrieve() {
 
 void ZEDManager::publishPointCloud() {
 
-
     point_cloud.width = width;
     point_cloud.height = height;
     int size = width*height;
+    point_cloud.points.resize(size);
+//    ROS_INFO_STREAM("size of pcl: "<<point_cloud.points.size());
 
-    sl::Vector3<float>* cpu_cloud = cloud.getPtr<sl::float3>();
+    sl::Vector4<float>* cpu_cloud = cloud.getPtr<sl::float4>();
     for (int i = 0; i < size; i++) {
         point_cloud.points[i].x = cpu_cloud[i][2];
         point_cloud.points[i].y = -cpu_cloud[i][0];
@@ -310,10 +309,6 @@ ZEDManager::ZEDManager():nh("~"),it(nh) {
 
 
 void ZEDManager::publishRGB() {
-
-
-//    sensor_msgs::ImagePtr msg = cv_bridge::CvImage(std_msgs::Header(), "bgr8", rgb_raw).toImageMsg();
-//    pub_raw_rgb.publish(msg);
 
     pub_raw_rgb.publish(imageToROSmsg(rgb_raw, sensor_msgs::image_encodings::BGR8, camera_frame_id, ros::Time::now()));
 
