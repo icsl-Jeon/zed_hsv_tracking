@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<launch>
+ <!-- recommend : launch is not that recommended. rather rosrun in each window for monitoring-->
+
+
+  <!-- vicon -->
+  <!--include file="$(find vicon_bridge)/launch/vicon.launch"/-->
+  
+  <arg name="zed_frame_id"  default="/zed_frame"/>
+  <arg name="world_frame_id"  default="/world"/>
+  
+  
+  <!--tf connecting btw vicon and zed camera-->
+  <node name="connecting_tf" pkg="zed_tracking" type="connecting_tf_vicon_zed" output="screen">
+  	<param name="frame1_id" type="string" value="$(arg world_frame_id)" />
+  	<param name="frame2_id" type="string" value="$(arg zed_frame_id)" />
+  </node>
+  
+  
+  <node name="zed_node" pkg="zed_tracking" type="zed_node" output="screen">
+  	<param name="world_frame_id" type="string" value="$(arg world_frame_id)" />
+  	<param name="camera_frame_id" type="string" value="$(arg zed_frame_id)" />
+  	<param name="loop_rate" type="double" value="50" />
+  	<param name="max_sensing_depth" type="string" value="4" />
+  
+  
+  </node>
+  
+  
+  
+  
+
+  
+</launch>
+  
