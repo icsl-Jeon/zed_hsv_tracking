@@ -129,6 +129,10 @@ sensor_msgs::ImagePtr imageToROSmsg(cv::Mat img, const std::string encodingType,
 
 
 
+/**
+ * ZED camera manager
+ */
+
 class ZEDManager{
 private:
 
@@ -136,7 +140,9 @@ private:
     // frame
     std::string camera_frame_id;
     std::string world_frame_id;
-    
+    std::string target_frame_id;
+
+
     // DATA
     sl::Camera ZED;
     int width;
@@ -150,7 +156,9 @@ private:
     sl::RuntimeParameters run_params;
     sl::Mat image;
     sl::Mat cloud;
-    
+
+    float min_depth;
+    float max_depth;
     
     // opencv type
     Mat rgb_raw; //RGBA
@@ -164,6 +172,7 @@ private:
     float x,y,z; //position of target w.r.t local frame of camera
     geometry_msgs::Point target_position; // target position in world frame
     Point point1,point2; // lower left corner / upper right corner of detected region
+    visualization_msgs::Marker BBMarker;
 
 
     // ROS
@@ -177,10 +186,15 @@ private:
     image_transport::Publisher pub_detected_rgb;
     ros::Publisher pub_cloud;
 
+    tf::TransformListener listener;
+    tf::TransformBroadcaster broadcaster;
+
+
+
+
 public:
 
     // parameters
-    float max_depth;
     double rate;
     ThresHSV thres_daloka;
 
@@ -191,7 +205,7 @@ public:
     void publishRGB();
     void get_target_pos();
     void tracking_update(); // update rectangle by thresholding HSV (Bounding Box)
-
+    void publishMarker(); // detected target position publish
 
 };
 
@@ -224,8 +238,11 @@ int main(int argc, char ** argv){
     while(ros::ok()){
         ZED_manager.retrieve();
         ZED_manager.tracking_update();
+        ZED_manager.get_target_pos();
         ZED_manager.publishRGB();
         ZED_manager.publishPointCloud();
+        ZED_manager.publishMarker();
+
 //        ROS_INFO("PCL published");
 
     }
@@ -246,8 +263,12 @@ ZEDManager::ZEDManager():nh("~"),it(nh) {
     // parameter parsing
     nh.getParam("world_frame_id",world_frame_id);
     nh.getParam("camera_frame_id",camera_frame_id);
+    nh.getParam("target_frame_id",target_frame_id);
+
     nh.getParam("loop_rate",rate);
-    nh.getParam("max_sensing_depth",rate);
+    nh.getParam("max_sensing_depth",max_depth);
+    nh.getParam("min_sensing_depth",min_depth);
+
 
     nh.getParam("H_max",thres_daloka.iHighH);
     nh.getParam("H_min",thres_daloka.iLowH);
@@ -271,13 +292,37 @@ ZEDManager::ZEDManager():nh("~"),it(nh) {
     init_params.camera_resolution=sl::RESOLUTION_VGA;
     init_params.camera_fps=rate;
     init_params.coordinate_units=sl::UNIT_METER;
-    init_params.depth_minimum_distance=0.4; // if we lower this limit, computation increases
+    init_params.depth_minimum_distance=min_depth; // if we lower this limit, computation increases
+    init_params.depth_mode=sl::DEPTH_MODE_ULTRA;
     run_params.sensing_mode=sl::SENSING_MODE_STANDARD;
+
     ZED.setDepthMaxRangeValue(max_depth);
     ZED.disableSpatialMapping();
     ZED.setCameraSettings(sl::CAMERA_SETTINGS_EXPOSURE, -1, true);
 
 
+    // bounding box marker
+
+
+    // Bounded Box around target
+    BBMarker.header.frame_id=world_frame_id;
+    BBMarker.header.stamp=ros::Time::now();
+    BBMarker.ns="targetBB";
+    BBMarker.action=visualization_msgs::Marker::ADD;
+    BBMarker.id=0;
+    BBMarker.type=visualization_msgs::Marker::CUBE;
+
+    BBMarker.pose.orientation.x = 0.0;
+    BBMarker.pose.orientation.y = 0.0;
+    BBMarker.pose.orientation.z = 0.0;
+    BBMarker.pose.orientation.w = 1.0;
+
+    BBMarker.scale.x = 0.3;
+    BBMarker.scale.y = BBMarker.scale.x;
+    BBMarker.scale.z= 0.3;
+
+    BBMarker.color.r=1.0;
+    BBMarker.color.a=0.5;
 
 
     sl::ERROR_CODE err = ZED.open(init_params);
@@ -393,10 +438,12 @@ void ZEDManager::tracking_update(){
             max_y = cur_y;
     }
 
-    point1.x = min_x;
-    point1.y = min_y;
-    point2.x = max_x;
-    point2.y = max_y;
+
+    // margin
+    point1.x = min_x+10;
+    point1.y = min_y+10;
+    point2.x = max_x-10;
+    point2.y = max_y-10;
 
 
     // applying rectangle
@@ -404,6 +451,60 @@ void ZEDManager::tracking_update(){
     rectangle(rgb_detected,point1,point2,Scalar(0, 0, 255), 2, 8);
 };
 
+
+// if we get any image after initialization, get the position of target
+void ZEDManager::get_target_pos(){
+
+    if(point_cloud.height==rgb_raw.rows) {
+
+        float sum_x = 0, sum_y = 0, sum_z = 0;
+        int N_pixel = 0; // num of non-nan number
+
+        for (int j = point1.y; j < point2.y; j++)
+            for (int i = point1.x; i < point2.x; i++) {
+                pcl::PointXYZ p = point_cloud.at(i, j);
+                if (p.x == p.x && p.y == p.y && p.z == p.z) {
+                    sum_x += p.x;
+                    sum_y += p.y;
+                    sum_z += p.z;
+                    N_pixel++;
+                }
+            }
+
+        // from local coordinate
+        x = sum_x / N_pixel;
+        y = sum_y / N_pixel;
+        z = sum_z / N_pixel;
+
+        if (x == x && y == y && z == z) {
+            // world 2 zed
+            tf::StampedTransform w2c;
+
+            listener.lookupTransform(world_frame_id, camera_frame_id, ros::Time(0), w2c);
+            tf::Vector3 target_pos = w2c * tf::Vector3(x, y, z);
+
+            target_position.x=target_pos.x();
+            target_position.y=target_pos.y();
+            target_position.z=target_pos.z();
+
+
+            tf::Transform transform;
+            transform.setOrigin( tf::Vector3(target_pos.x(), target_pos.y(), target_pos.z()));
+            transform.setRotation(tf::Quaternion(0,0,0,1));
+            broadcaster.sendTransform(tf::StampedTransform(transform, ros::Time::now(),world_frame_id, target_frame_id ));
+            // global coordinates
+        }
+    }
+    else
+        ROS_WARN("pcl not recieved");
+
+}
+
+void ZEDManager::publishMarker() {
+    BBMarker.pose.position=target_position;
+    marker_pub.publish(BBMarker);
+
+}
 
 
 
