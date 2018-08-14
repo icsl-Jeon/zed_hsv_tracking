@@ -37,7 +37,8 @@ int main(int argc, char** argv){
 	tf::Quaternion q=tf::createQuaternionFromRPY(R,P,Y);
 	transform.setRotation( q );
     br.sendTransform(tf::StampedTransform(transform, ros::Time::now(),frame1, frame2 ));
-    rate.sleep();
+	ros::spinOnce();
+	rate.sleep();
   }
   return 0;
 };
