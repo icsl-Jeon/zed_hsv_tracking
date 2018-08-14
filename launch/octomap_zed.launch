@@ -3,17 +3,21 @@
 <launch>
  <!-- recommend : launch is not that recommended. rather rosrun in each window for monitoring-->
 
+  <arg name="world_frame_id" value="/world"/>
+  <arg name="target_frame_id" value="/target"/>
+  <arg name="zed_frame_id" value="/zed_frame"/>
+
   <!-- vicon -->
   <include file="$(find vicon_bridge)/launch/vicon.launch"/>
   
   <!--ZED-->
   
-  <include file="$(find zed_wrapper)/launch/display.launch"/>
+  <include file="$(find zed_tracking)/launch/zed_boseong.launch"/>
   
   <!--tf connecting btw vicon and zed camera-->
   
   <node name="connecting_tf" pkg="zed_tracking" type="connecting_tf_vicon_zed" output="screen"/>
-  
+  <param name="frame1_id">
   <!--octomap server -->
   <include file="$(find octomap_server)/launch/octomap_tracking_server_zed.launch"/>
   

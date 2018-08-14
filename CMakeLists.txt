@@ -152,7 +152,6 @@ link_directories(${PCL_LIBRARY_DIRS})
 ## Declare a C++ executable
 ## With catkin_make all packages are built within a single CMake context
 ## The recommended prefix ensures that target names across packages don't collide
-add_executable(HSV_tracking src/zed_run.cpp)
 add_executable(zed_node src/zed_manager.cpp)
 add_executable(connecting_tf_vicon_zed src/connecting_tf.cpp)
 
@@ -167,14 +166,6 @@ add_executable(connecting_tf_vicon_zed src/connecting_tf.cpp)
 # add_dependencies(${PROJECT_NAME}_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
 ## Specify libraries to link a library or executable target against
-target_link_libraries(HSV_tracking    ${catkin_LIBRARIES}
-           ${ZED_LIBRARIES}
-        ${CUDA_CUDA_LIBRARY}
-        ${CUDA_CUDART_LIBRARY}
-        ${CUDA_NPP_LIBRARIES_ZED}
-        ${OpenCV_LIBRARIES}
-        ${PCL_LIBRARIES}
- )
 target_link_libraries(zed_node ${catkin_LIBRARIES}
            ${ZED_LIBRARIES}
         ${CUDA_CUDA_LIBRARY}

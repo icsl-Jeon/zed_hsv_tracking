@@ -16,6 +16,12 @@
   <node name="connecting_tf" pkg="zed_tracking" type="connecting_tf_vicon_zed" output="screen">
   	<param name="frame1_id" type="string" value="$(arg world_frame_id)" />
   	<param name="frame2_id" type="string" value="$(arg zed_frame_id)" />
+  	<param name="x" type="double" value="0.1" />
+  	<param name="y" type="double" value="0.0" />
+  	<param name="z" type="double" value="-0.1" />
+  	<param name="R" type="double" value="0.0" />
+  	<param name="P" type="double" value="$(eval -20*3.141592/180)" />
+  	<param name="Y" type="double" value="0.0" />
   </node>
   
   

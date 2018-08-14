@@ -166,7 +166,7 @@ private:
     Mat rgb_detected; // detected region
     Mat nonZeroCoordinates; // detected region (index)
     bool callback;
-
+    bool view_thres;
 
     // Target
     float x,y,z; //position of target w.r.t local frame of camera
@@ -197,7 +197,7 @@ public:
     // parameters
     double rate;
     ThresHSV thres_daloka;
-
+    bool HSV_tuning;
 
     ZEDManager() ;
     void retrieve();
@@ -218,7 +218,7 @@ int main(int argc, char ** argv){
     ZEDManager ZED_manager;
     ros::Rate rate(ZED_manager.rate);
 
-
+    if(ZED_manager.HSV_tuning){
     namedWindow(window_name, CV_WINDOW_AUTOSIZE);
 
 
@@ -231,26 +231,35 @@ int main(int argc, char ** argv){
 
     cvCreateTrackbar("LowV", window_name, &(ZED_manager.thres_daloka.iLowV), 255); //Value (0 - 255)
     cvCreateTrackbar("HighV", window_name,&(ZED_manager.thres_daloka.iHighV), 255);
-
+    }
 
 
 
     while(ros::ok()){
-        ZED_manager.retrieve();
-        ZED_manager.tracking_update();
-        ZED_manager.get_target_pos();
-        ZED_manager.publishRGB();
+   
+	ros::Time t0,t1;
+ 
+	t0=ros::Time::now();
+        ZED_manager.retrieve(); 
+	t1=ros::Time::now();
+
+	t0=ros::Time::now();
+	ZED_manager.tracking_update(); 
+	t1=ros::Time::now();
+
+	t0=ros::Time::now();
+	ZED_manager.get_target_pos(); 
+	t1=ros::Time::now();
+	ZED_manager.publishRGB();
         ZED_manager.publishPointCloud();
         ZED_manager.publishMarker();
 
 //        ROS_INFO("PCL published");
+    	rate.sleep();
 
     }
 
-    ros::spinOnce();
-    rate.sleep();
-
-}
+   }
 
 /**
 * Function definition
@@ -269,6 +278,7 @@ ZEDManager::ZEDManager():nh("~"),it(nh) {
     nh.getParam("max_sensing_depth",max_depth);
     nh.getParam("min_sensing_depth",min_depth);
 
+    nh.getParam("HSV_tuning",HSV_tuning);
 
     nh.getParam("H_max",thres_daloka.iHighH);
     nh.getParam("H_min",thres_daloka.iLowH);
@@ -277,7 +287,7 @@ ZEDManager::ZEDManager():nh("~"),it(nh) {
     nh.getParam("V_max",thres_daloka.iHighV);
     nh.getParam("V_min",thres_daloka.iLowV);
 
-
+    nh.getParam("view_threshold_img",view_thres);
     // advertise  register
     target_pos_pub = nh.advertise<geometry_msgs::PointStamped>("target_position",10);
     marker_pub = nh.advertise<visualization_msgs::Marker>("target_BB",10);
@@ -292,8 +302,8 @@ ZEDManager::ZEDManager():nh("~"),it(nh) {
     init_params.camera_resolution=sl::RESOLUTION_VGA;
     init_params.camera_fps=rate;
     init_params.coordinate_units=sl::UNIT_METER;
-    init_params.depth_minimum_distance=min_depth; // if we lower this limit, computation increases
-    init_params.depth_mode=sl::DEPTH_MODE_ULTRA;
+    //init_params.depth_minimum_distance=min_depth; // if we lower this limit, computation increases
+    init_params.depth_mode=sl::DEPTH_MODE_PERFORMANCE; // ULTRA >> QUALITY >> MEDIUM >> PERFROMANCE 
     run_params.sensing_mode=sl::SENSING_MODE_STANDARD;
 
     ZED.setDepthMaxRangeValue(max_depth);
@@ -403,17 +413,19 @@ void ZEDManager::tracking_update(){
             imgThresholded); //Threshold the image
 
     //morphological opening (remove small objects from the foreground)
+ /** 
     erode(imgThresholded, imgThresholded, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
     dilate(imgThresholded, imgThresholded, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
-
+**/
+/**
     //morphological closing (fill small holes in the foreground)
     dilate(imgThresholded, imgThresholded, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
     erode(imgThresholded, imgThresholded, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
-
-
+**/
+    if(HSV_tuning){
     imshow("Thresholded Image", imgThresholded); //show the thresholded image
-    waitKey(3);
-
+    waitKey(1);
+   	}
 
     // bounding box
 
