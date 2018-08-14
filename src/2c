@@ -142,6 +142,7 @@ private:
     std::string world_frame_id;
     std::string target_frame_id;
 	std::string base_frame_id; // topic of poseStamped
+	tf::Transform b2c; // base to camera
 	
 	// DATA
     sl::Camera ZED;
@@ -198,12 +199,9 @@ public:
     double rate;
     ThresHSV thres_daloka;
     bool HSV_tuning;
-	tf::Transform b2c; // base to camera
-	tf::Transform w2c; // world to camera (zed)	
-	
+
     ZEDManager() ;
-    void update_tf();
-	void retrieve();
+    void retrieve();
     void publishPointCloud();
     void publishRGB();
     void get_target_pos();
@@ -239,10 +237,9 @@ int main(int argc, char ** argv){
 
 
     while(ros::ok()){
+   
 	ros::Time t0,t1;
-	
-	ZED_manager.update_tf();
-
+ 
 	t0=ros::Time::now();
         ZED_manager.retrieve(); 
 	t1=ros::Time::now();
@@ -374,29 +371,6 @@ ZEDManager::ZEDManager():nh("~"),it(nh) {
 
 
 }
-void ZEDManager::update_tf(){
-   
-			// world 2 basefrme
-            tf::StampedTransform w2b;
-			try{
-            listener.lookupTransform(world_frame_id,base_frame_id, ros::Time(0), w2b);
-			}
-			catch(tf::TransformException ex){
-				ROS_ERROR("w2b not found");
-				std::cout<<"wating"<<std::endl;
-				ros::Duration(1.0).sleep();
-			}
-
-
-			// world 2 zed
-            w2c=w2b*b2c;
-            
-			broadcaster.sendTransform(tf::StampedTransform(w2c, ros::Time::now(),world_frame_id,camera_frame_id ));
-			
-
-
-
-}
 
 void ZEDManager::retrieve() {
 
@@ -497,10 +471,10 @@ void ZEDManager::tracking_update(){
 
 
     // margin
-    point1.x = min_x;
-    point1.y = min_y;
-    point2.x = max_x;
-    point2.y = max_y;
+    point1.x = min_x+10;
+    point1.y = min_y+10;
+    point2.x = max_x-10;
+    point2.y = max_y-10;
 
 
     // applying rectangle
@@ -534,10 +508,18 @@ void ZEDManager::get_target_pos(){
         z = sum_z / N_pixel;
 
         if (x == x && y == y && z == z) {
-           
+            
+			// world 2 basefrme
+            tf::StampedTransform w2b;
+            listener.lookupTransform(world_frame_id,base_frame_id, ros::Time(0), w2b);
 			
-		
-			tf::Vector3 target_pos = w2c * tf::Vector3(x, y, z);
+
+
+			// world 2 zed
+            tf::StampedTransform w2c;
+
+            listener.lookupTransform(world_frame_id, camera_frame_id, ros::Time(0), w2c);
+            tf::Vector3 target_pos = w2c * tf::Vector3(x, y, z);
 
             target_position.x=target_pos.x();
             target_position.y=target_pos.y();
@@ -547,8 +529,7 @@ void ZEDManager::get_target_pos(){
             tf::Transform transform;
             transform.setOrigin( tf::Vector3(target_pos.x(), target_pos.y(), target_pos.z()));
             transform.setRotation(tf::Quaternion(0,0,0,1));
-			
-			broadcaster.sendTransform(tf::StampedTransform(transform, ros::Time::now(),world_frame_id, target_frame_id ));
+            broadcaster.sendTransform(tf::StampedTransform(transform, ros::Time::now(),world_frame_id, target_frame_id ));
             // global coordinates
         }
     }
