@@ -182,7 +182,7 @@ private:
 
 
     image_transport::ImageTransport it;
-    image_transport::Publisher pub_raw_rgb;
+    //image_transport::Publisher pub_raw_rgb;
     image_transport::Publisher pub_detected_rgb;
     ros::Publisher pub_cloud;
 
@@ -316,23 +316,19 @@ ZEDManager::ZEDManager():nh("~"),it(nh) {
 
     pub_cloud=nh.advertise<sensor_msgs::PointCloud2>("point_cloud",1);
     pub_detected_rgb=it.advertise("detected_rgb",1);
-    pub_raw_rgb=it.advertise("raw_rgb",1);
+    //pub_raw_rgb=it.advertise("raw_rgb",1);
 
 
     // ZED_params
     init_params.sdk_verbose=true;
     init_params.camera_resolution=sl::RESOLUTION_VGA;
-    init_params.camera_fps=rate;
+    init_params.camera_fps=30;
     init_params.coordinate_units=sl::UNIT_METER;
     //init_params.depth_minimum_distance=min_depth; // if we lower this limit, computation increases
     init_params.depth_mode=sl::DEPTH_MODE_PERFORMANCE; // ULTRA >> QUALITY >> MEDIUM >> PERFROMANCE 
     run_params.sensing_mode=sl::SENSING_MODE_STANDARD;
 
-    ZED.setDepthMaxRangeValue(max_depth);
-    ZED.disableSpatialMapping();
-    ZED.setCameraSettings(sl::CAMERA_SETTINGS_EXPOSURE, -1, true);
-
-
+    
     // bounding box marker
 
 
@@ -364,6 +360,10 @@ ZEDManager::ZEDManager():nh("~"),it(nh) {
         printf("zed camera opening error! please run Diagnotics");
         exit(-1);
     }
+
+	ZED.setDepthMaxRangeValue(max_depth);
+    ZED.disableSpatialMapping();
+    ZED.setCameraSettings(sl::CAMERA_SETTINGS_EXPOSURE, -1, true);
 
 
     width=ZED.getResolution().width;
@@ -439,7 +439,7 @@ void ZEDManager::publishPointCloud() {
 
 
 void ZEDManager::publishRGB() {
-    pub_raw_rgb.publish(imageToROSmsg(rgb_raw, sensor_msgs::image_encodings::BGR8, camera_frame_id, ros::Time::now()));
+    //pub_raw_rgb.publish(imageToROSmsg(rgb_raw, sensor_msgs::image_encodings::BGR8, camera_frame_id, ros::Time::now()));
     pub_detected_rgb.publish(imageToROSmsg(rgb_detected, sensor_msgs::image_encodings::BGR8, camera_frame_id, ros::Time::now()));
 }
 

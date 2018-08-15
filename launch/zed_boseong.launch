@@ -32,9 +32,9 @@
   	<param name="camera_frame_id" type="string" value="$(arg zed_frame_id)" />
 	<param name="target_frame_id" type="string" value="$(arg target_frame_id)"/>
 	<param name="base_frame_id" type="string" value="vicon/boseong_multirotor/boseong_multirotor"/>
-	<param name="loop_rate" type="double" value="50" />
-  	<param name="max_sensing_depth" type="string" value="50" />
-  	<param name="min_sensing_depth" type="string" value="0.3" />
+	<param name="loop_rate" type="double" value="20" />
+  	<param name="max_sensing_depth" type="double" value="4" />
+  	<param name="min_sensing_depth" type="double" value="0.5" />
   	<param name="H_max" value="76" type="int" />
   	<param name="H_min" value="31" type="int" />
   	<param name="S_max" value="255" type="int" />
