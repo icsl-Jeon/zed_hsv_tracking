@@ -1,5 +1,3 @@
-<?xml version="1.0" encoding="UTF-8"?>
-
 <launch>
  <!-- recommend : launch is not that recommended. rather rosrun in each window for monitoring-->
 
@@ -10,11 +8,12 @@
   <arg name="zed_frame_id"  default="/zed_frame"/>
   <arg name="world_frame_id"  default="/world"/>
   <arg name="target_frame_id"  default="/target"/>
+  <arg name="base_frame_topic"  default="/vicon/vehicle_pose"/>
   
   
   <!--tf connecting btw vicon and zed camera-->
  
- <!--
+<!--
  <node name="connecting_tf" pkg="zed_tracking" type="connecting_tf_vicon_zed" output="screen">
   	<param name="frame1_id" type="string" value="/world" />
   	<param name="frame2_id" type="string" value="$(arg zed_frame_id)" />
@@ -22,17 +21,19 @@
   	<param name="y" type="double" value="0.0" />
   	<param name="z" type="double" value="-0.1" />
   	<param name="R" type="double" value="0.0" />
-  	<param name="P" type="double" value="$(eval 20*3.141592/180)" />
+  	<param name="P" type="double" value="$(eval 28*3.141592/180)" />
   	<param name="Y" type="double" value="0.0" />
   </node>
-  -->
-  
+
+-->
+
+ 
   <node name="zed_node" pkg="zed_tracking" type="zed_node" output="screen">
   	<param name="world_frame_id" type="string" value="$(arg world_frame_id)" />
   	<param name="camera_frame_id" type="string" value="$(arg zed_frame_id)" />
 	<param name="target_frame_id" type="string" value="$(arg target_frame_id)"/>
-	<param name="base_frame_id" type="string" value="vicon/boseong_multirotor/boseong_multirotor"/>
-	<param name="loop_rate" type="double" value="20" />
+	<param name="base_frame_topic" type="string" value="$(arg base_frame_topic)"/>
+	<param name="loop_rate" type="double" value="30" />
   	<param name="max_sensing_depth" type="double" value="4" />
   	<param name="min_sensing_depth" type="double" value="0.5" />
   	<param name="H_max" value="76" type="int" />
@@ -41,6 +42,7 @@
   	<param name="S_min" value="116" type="int" />
   	<param name="V_max" value="255" type="int" />
   	<param name="V_min" value="60" type="int" />
+  	<param name="HSV_tuning" value="false" type="bool" />
  	<param name="x" type="double" value="0.1" />
   	<param name="y" type="double" value="0.0" />
   	<param name="z" type="double" value="-0.1" />
@@ -48,10 +50,9 @@
   	<param name="P" type="double" value="$(eval 28*3.141592/180)" />
   	<param name="Y" type="double" value="0.0" />
  </node> 
- 
-
+<!--
  <node name="rviz" pkg="rviz" type="rviz" args="-d $(find zed_tracking)/rviz/HSV_zed.rviz"/>
-  
+  -->
   
   
   
