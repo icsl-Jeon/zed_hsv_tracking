@@ -141,7 +141,6 @@ private:
 
     // frame
     std::string camera_frame_id;
-    std::string world_frame_id;
     std::string target_frame_id;
 	std::string base_frame_id; // topic of poseStamped
 	
@@ -200,8 +199,8 @@ public:
     bool HSV_tuning;
     bool callback;
 	tf::Transform b2c; // base to camera
-	tf::Transform w2c; // world to camera (zed)	
-	
+	tf::Transform w2c; // world to camera (zed)		
+    std::string world_frame_id;
     geometry_msgs::Point target_position_filtered; // target position in world frame
 	
 	ros::Subscriber base_frame_pose_sub; 
@@ -259,6 +258,7 @@ int main(int argc, char ** argv){
  	
 	geometry_msgs::PointStamped pointStamped;
 	pointStamped.header.stamp = ros::Time::now();
+	pointStamped.header.frame_id =ZED_manager.world_frame_id; 
 	pointStamped.point=ZED_manager.target_position_filtered;
  	ZED_manager.target_pos_pub.publish(pointStamped);	
 	}
