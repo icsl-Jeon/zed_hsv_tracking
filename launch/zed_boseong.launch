@@ -1,3 +1,4 @@
+<?xml version="1.0" encoding="UTF-8"?>
 <launch>
  <!-- recommend : launch is not that recommended. rather rosrun in each window for monitoring-->
 
@@ -24,7 +25,6 @@
   	<param name="P" type="double" value="$(eval 28*3.141592/180)" />
   	<param name="Y" type="double" value="0.0" />
   </node>
-
 -->
 
  
@@ -45,18 +45,24 @@
   	<param name="HSV_tuning" value="false" type="bool" />
  	<param name="x" type="double" value="0.1" />
   	<param name="y" type="double" value="0.0" />
-  	<param name="z" type="double" value="-0.1" />
+  	<param name="z" type="double" value="0.0" />
   	<param name="R" type="double" value="0.0" />
-  	<param name="P" type="double" value="$(eval 28*3.141592/180)" />
+  	<param name="P" type="double" value="$(eval 20*3.141592/180)" />
   	<param name="Y" type="double" value="0.0" />
- </node> 
+ </node>
+
+ <include file="$(find octomap_server)/launch/octomap_tracking_server_zed.launch"> 
+  <arg name="world_frame_id" value="/world"/>
+  <arg name="resolution"  value="0.08"/>
+  <arg name="max_depth_range" value="4"/>
+ </include> 
+ 
+
 <!--
  <node name="rviz" pkg="rviz" type="rviz" args="-d $(find zed_tracking)/rviz/HSV_zed.rviz"/>
   -->
   
   
-  
-
-  
+   
 </launch>
   

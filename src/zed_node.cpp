@@ -140,8 +140,6 @@ private:
 
 
     // frame
-    std::string camera_frame_id;
-    std::string target_frame_id;
 	std::string base_frame_id; // topic of poseStamped
 	
 	// DATA
@@ -186,7 +184,6 @@ private:
     ros::Publisher pub_cloud;
 	
     tf::TransformListener listener;
-    tf::TransformBroadcaster broadcaster;
 
 
 
@@ -196,16 +193,19 @@ public:
     // parameters
     double rate;
     ThresHSV thres_daloka;
+    std::string target_frame_id;
     bool HSV_tuning;
     bool callback;
 	tf::Transform b2c; // base to camera
 	tf::Transform w2c; // world to camera (zed)		
     std::string world_frame_id;
     geometry_msgs::Point target_position_filtered; // target position in world frame
+    std::string camera_frame_id;
 	
 	ros::Subscriber base_frame_pose_sub; 
     ros::Publisher target_pos_pub; // publish position (x,y,z) of target
 	
+    tf::TransformBroadcaster broadcaster;
 	ZEDManager() ;
 	void retrieve();
     void publishPointCloud();
@@ -249,28 +249,33 @@ int main(int argc, char ** argv){
     ZED_manager.retrieve(); 
 	ZED_manager.tracking_update(); 
 	
-	if(ZED_manager.callback){
 	ZED_manager.get_target_pos(); 
 
 	ZED_manager.publishRGB();
     ZED_manager.publishPointCloud();
     ZED_manager.publishMarker();
  	
+	
 	geometry_msgs::PointStamped pointStamped;
 	pointStamped.header.stamp = ros::Time::now();
 	pointStamped.header.frame_id =ZED_manager.world_frame_id; 
 	pointStamped.point=ZED_manager.target_position_filtered;
  	ZED_manager.target_pos_pub.publish(pointStamped);	
-	}
-	else {
-	ROS_WARN("please turn on vicon from gcs");
-	}
+
+	tf::Vector3 origin(pointStamped.point.x,pointStamped.point.y,pointStamped.point.z);
+	tf::Quaternion q(0,0,0,1);
+	tf::Transform target_tf(q,origin);	
+	ZED_manager.broadcaster.sendTransform(tf::StampedTransform(target_tf, ros::Time::now(),ZED_manager.world_frame_id,ZED_manager.target_frame_id ));
+
+    
 	ros::spinOnce();
-    rate.sleep();
+	rate.sleep();
+	
 
-    }
+	}
+	}
 
-   }
+   
 
 /**
 * Function definition
@@ -339,7 +344,7 @@ ZEDManager::ZEDManager():nh("~"),it(nh) {
     init_params.camera_fps=30;
     init_params.coordinate_units=sl::UNIT_METER;
     //init_params.depth_minimum_distance=min_depth; // if we lower this limit, computation increases
-    init_params.depth_mode=sl::DEPTH_MODE_PERFORMANCE; // ULTRA >> QUALITY >> MEDIUM >> PERFROMANCE 
+    init_params.depth_mode=sl::DEPTH_MODE_QUALITY; // ULTRA >> QUALITY >> MEDIUM >> PERFROMANCE 
     run_params.sensing_mode=sl::SENSING_MODE_STANDARD;
 
     
@@ -392,7 +397,6 @@ ZEDManager::ZEDManager():nh("~"),it(nh) {
 
 void ZEDManager::base_frame_pose_callback(const geometry_msgs::PoseStampedConstPtr& msg){
 	
-	
 	// base frame update 
 	base_frame_pose=*msg;
 	tf::Vector3 origin(base_frame_pose.pose.position.x,base_frame_pose.pose.position.y,base_frame_pose.pose.position.z);
@@ -401,9 +405,9 @@ void ZEDManager::base_frame_pose_callback(const geometry_msgs::PoseStampedConstP
 
 
 	w2c=w2b*b2c; // world 2 camera
-
+	//std::cout<<"[ "<<w2c.getOrigin().x()<<", "<<w2c.getOrigin().y()<<", "<<w2c.getOrigin().z<<" ]"<<std::endl;
 	broadcaster.sendTransform(tf::StampedTransform(w2c, ros::Time::now(),world_frame_id,camera_frame_id ));
-		
+	
 	callback = true ;	
 }
 
@@ -422,7 +426,6 @@ void ZEDManager::retrieve() {
 };
 
 void ZEDManager::publishPointCloud() {
-	broadcaster.sendTransform(tf::StampedTransform(w2c, ros::Time::now(),world_frame_id,camera_frame_id ));
 		
     point_cloud.width = width;
     point_cloud.height = height;
@@ -568,13 +571,15 @@ void ZEDManager::get_target_pos(){
 			target_position_filtered.y=filter_out[1];
 			target_position_filtered.z=filter_out[2];
 			
+			/**
 
             tf::Transform transform;
             transform.setOrigin( tf::Vector3(target_position_filtered.x, target_position_filtered.y, target_position_filtered.z));
             transform.setRotation(tf::Quaternion(0,0,0,1));
 			
 			broadcaster.sendTransform(tf::StampedTransform(transform, ros::Time::now(),world_frame_id, target_frame_id ));
-            // global coordinates
+            **/
+			// global coordinates
         }
     }
     else
