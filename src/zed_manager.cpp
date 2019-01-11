@@ -218,7 +218,7 @@ int main(int argc, char ** argv){
     ZEDManager ZED_manager;
     ros::Rate rate(ZED_manager.rate);
 
-
+	/**
     namedWindow(window_name, CV_WINDOW_AUTOSIZE);
 
 
@@ -233,7 +233,7 @@ int main(int argc, char ** argv){
     cvCreateTrackbar("HighV", window_name,&(ZED_manager.thres_daloka.iHighV), 255);
 
 
-
+	**/
 
     while(ros::ok()){
         ZED_manager.retrieve();
@@ -411,8 +411,8 @@ void ZEDManager::tracking_update(){
     erode(imgThresholded, imgThresholded, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
 
 
-    imshow("Thresholded Image", imgThresholded); //show the thresholded image
-    waitKey(3);
+    //imshow("Thresholded Image", imgThresholded); //show the thresholded image
+    //waitKey(3);
 
 
     // bounding box
