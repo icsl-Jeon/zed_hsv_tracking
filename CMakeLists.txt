@@ -113,7 +113,6 @@ find_package(PCL REQUIRED)
 ## DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
   INCLUDE_DIRS include
-  LIBRARIES zed_node
   CATKIN_DEPENDS pcl_conversions pcl_ros roscpp sensor_msgs tf
 #  DEPENDS system_lib
 )
@@ -134,9 +133,7 @@ include_directories(${CUDA_INCLUDE_DIRS})
 include_directories(${ZED_INCLUDE_DIRS})
 
 include_directories(${OPENCV_INCLUDE_DIRS})
-include_directories(/opt/ros/kinetic/include)
 include_directories(${PCL_INCLUDE_DIRS})
-include_directories(/opt/ros/kinetic/include)
 
 link_directories(${ZED_LIBRARY_DIR})
 link_directories(${CUDA_LIBRARY_DIRS})
@@ -152,8 +149,12 @@ link_directories(${PCL_LIBRARY_DIRS})
 ## Declare a C++ executable
 ## With catkin_make all packages are built within a single CMake context
 ## The recommended prefix ensures that target names across packages don't collide
+<<<<<<< HEAD
 add_executable(zed_node src/zed_manager.cpp)
 add_executable(connecting_tf_vicon_zed src/connecting_tf.cpp)
+=======
+add_executable(zed_node src/zed_node.cpp src/smoothing_filter.cpp)
+>>>>>>> eed05a60e1e05ccd61f8c10cb182b5685a2084e1
 
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
@@ -173,12 +174,7 @@ target_link_libraries(zed_node ${catkin_LIBRARIES}
         ${CUDA_NPP_LIBRARIES_ZED}
         ${OpenCV_LIBRARIES}
         ${PCL_LIBRARIES}
- )
-
-
-target_link_libraries(connecting_tf_vicon_zed    ${catkin_LIBRARIES})
-
-
+)
 
 
 

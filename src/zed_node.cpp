@@ -44,6 +44,8 @@
 #include <image_transport/image_transport.h>
 #include <sl/Camera.hpp>
 #include <string>
+#include <vector>
+#include <zed_node/smoothing_filter.h>
 
 using namespace cv;
 
@@ -138,12 +140,9 @@ private:
 
 
     // frame
-    std::string camera_frame_id;
-    std::string world_frame_id;
-    std::string target_frame_id;
-
-
-    // DATA
+	std::string base_frame_id; // topic of poseStamped
+	
+	// DATA
     sl::Camera ZED;
     int width;
     int height;
@@ -165,29 +164,26 @@ private:
     Mat HSV;
     Mat rgb_detected; // detected region
     Mat nonZeroCoordinates; // detected region (index)
-    bool callback;
-
+    bool view_thres;
 
     // Target
     float x,y,z; //position of target w.r.t local frame of camera
     geometry_msgs::Point target_position; // target position in world frame
     Point point1,point2; // lower left corner / upper right corner of detected region
     visualization_msgs::Marker BBMarker;
-
-
-    // ROS
+	geometry_msgs::PoseStamped base_frame_pose; // base frame pose 
+    Filter filter; // moving average filter
+	
+	// ROS
     ros::NodeHandle nh;
-    ros::Publisher target_pos_pub; // publish position (x,y,z) of target
     ros::Publisher marker_pub; // bounding box for visualization
 
-
     image_transport::ImageTransport it;
-    image_transport::Publisher pub_raw_rgb;
+    //image_transport::Publisher pub_raw_rgb;
     image_transport::Publisher pub_detected_rgb;
     ros::Publisher pub_cloud;
-
+	
     tf::TransformListener listener;
-    tf::TransformBroadcaster broadcaster;
 
 
 
@@ -197,16 +193,27 @@ public:
     // parameters
     double rate;
     ThresHSV thres_daloka;
-
-
-    ZEDManager() ;
-    void retrieve();
+    std::string target_frame_id;
+    bool HSV_tuning;
+    bool callback;
+	tf::Transform b2c; // base to camera
+	tf::Transform w2c; // world to camera (zed)		
+    std::string world_frame_id;
+    geometry_msgs::Point target_position_filtered; // target position in world frame
+    std::string camera_frame_id;
+	
+	ros::Subscriber base_frame_pose_sub; 
+    ros::Publisher target_pos_pub; // publish position (x,y,z) of target
+	
+    tf::TransformBroadcaster broadcaster;
+	ZEDManager() ;
+	void retrieve();
     void publishPointCloud();
     void publishRGB();
     void get_target_pos();
     void tracking_update(); // update rectangle by thresholding HSV (Bounding Box)
     void publishMarker(); // detected target position publish
-
+	void base_frame_pose_callback(const geometry_msgs::PoseStampedConstPtr&); 
 };
 
 
@@ -218,7 +225,7 @@ int main(int argc, char ** argv){
     ZEDManager ZED_manager;
     ros::Rate rate(ZED_manager.rate);
 
-	/**
+    if(ZED_manager.HSV_tuning){
     namedWindow(window_name, CV_WINDOW_AUTOSIZE);
 
 
@@ -231,26 +238,44 @@ int main(int argc, char ** argv){
 
     cvCreateTrackbar("LowV", window_name, &(ZED_manager.thres_daloka.iLowV), 255); //Value (0 - 255)
     cvCreateTrackbar("HighV", window_name,&(ZED_manager.thres_daloka.iHighV), 255);
-
-
-	**/
-
-    while(ros::ok()){
-        ZED_manager.retrieve();
-        ZED_manager.tracking_update();
-        ZED_manager.get_target_pos();
-        ZED_manager.publishRGB();
-        ZED_manager.publishPointCloud();
-        ZED_manager.publishMarker();
-
-//        ROS_INFO("PCL published");
-
     }
 
-    ros::spinOnce();
-    rate.sleep();
 
-}
+
+    while(ros::ok()){
+	ros::Time t0,t1;
+	
+
+    ZED_manager.retrieve(); 
+	ZED_manager.tracking_update(); 
+	
+	ZED_manager.get_target_pos(); 
+
+	ZED_manager.publishRGB();
+    ZED_manager.publishPointCloud();
+    ZED_manager.publishMarker();
+ 	
+	
+	geometry_msgs::PointStamped pointStamped;
+	pointStamped.header.stamp = ros::Time::now();
+	pointStamped.header.frame_id =ZED_manager.world_frame_id; 
+	pointStamped.point=ZED_manager.target_position_filtered;
+ 	ZED_manager.target_pos_pub.publish(pointStamped);	
+
+	tf::Vector3 origin(pointStamped.point.x,pointStamped.point.y,pointStamped.point.z);
+	tf::Quaternion q(0,0,0,1);
+	tf::Transform target_tf(q,origin);	
+	ZED_manager.broadcaster.sendTransform(tf::StampedTransform(target_tf, ros::Time::now(),ZED_manager.world_frame_id,ZED_manager.target_frame_id ));
+
+    
+	ros::spinOnce();
+	rate.sleep();
+	
+
+	}
+	}
+
+   
 
 /**
 * Function definition
@@ -260,15 +285,21 @@ int main(int argc, char ** argv){
 
 ZEDManager::ZEDManager():nh("~"),it(nh) {
 
+
+	int average_horizon = 10 ;
+	filter=Filter(3,average_horizon);
+
     // parameter parsing
     nh.getParam("world_frame_id",world_frame_id);
     nh.getParam("camera_frame_id",camera_frame_id);
     nh.getParam("target_frame_id",target_frame_id);
-
+	nh.getParam("base_frame_topic",base_frame_id);
+	std::cout<<"vicon topic name: "<<base_frame_id<<std::endl;
     nh.getParam("loop_rate",rate);
     nh.getParam("max_sensing_depth",max_depth);
     nh.getParam("min_sensing_depth",min_depth);
 
+    nh.getParam("HSV_tuning",HSV_tuning);
 
     nh.getParam("H_max",thres_daloka.iHighH);
     nh.getParam("H_min",thres_daloka.iLowH);
@@ -277,30 +308,46 @@ ZEDManager::ZEDManager():nh("~"),it(nh) {
     nh.getParam("V_max",thres_daloka.iHighV);
     nh.getParam("V_min",thres_daloka.iLowV);
 
+	float c_x,c_y,c_z,c_R,c_P,c_Y;
 
+    nh.getParam("x",c_x);
+    nh.getParam("y",c_y);
+    nh.getParam("z",c_z);
+    nh.getParam("R",c_R);
+    nh.getParam("P",c_P);
+    nh.getParam("Y",c_Y);
+
+	b2c.setOrigin(tf::Vector3(c_x,c_y,c_z));
+	tf::Quaternion q;
+	q.setRPY(c_R,c_P,c_Y);
+	b2c.setRotation(q);
+	
+
+	target_position.x=0;
+	target_position.y=0;
+	target_position.z=0;
+
+    nh.getParam("view_threshold_img",view_thres);
     // advertise  register
     target_pos_pub = nh.advertise<geometry_msgs::PointStamped>("target_position",10);
-    marker_pub = nh.advertise<visualization_msgs::Marker>("target_BB",10);
+    base_frame_pose_sub = nh.subscribe(base_frame_id,3,&ZEDManager::base_frame_pose_callback,this);  
+	marker_pub = nh.advertise<visualization_msgs::Marker>("target_BB",10);
 
     pub_cloud=nh.advertise<sensor_msgs::PointCloud2>("point_cloud",1);
     pub_detected_rgb=it.advertise("detected_rgb",1);
-    pub_raw_rgb=it.advertise("raw_rgb",1);
+    //pub_raw_rgb=it.advertise("raw_rgb",1);
 
 
     // ZED_params
     init_params.sdk_verbose=true;
     init_params.camera_resolution=sl::RESOLUTION_VGA;
-    init_params.camera_fps=rate;
+    init_params.camera_fps=30;
     init_params.coordinate_units=sl::UNIT_METER;
-    init_params.depth_minimum_distance=min_depth; // if we lower this limit, computation increases
-    init_params.depth_mode=sl::DEPTH_MODE_ULTRA;
+    //init_params.depth_minimum_distance=min_depth; // if we lower this limit, computation increases
+    init_params.depth_mode=sl::DEPTH_MODE_QUALITY; // ULTRA >> QUALITY >> MEDIUM >> PERFROMANCE 
     run_params.sensing_mode=sl::SENSING_MODE_STANDARD;
 
-    ZED.setDepthMaxRangeValue(max_depth);
-    ZED.disableSpatialMapping();
-    ZED.setCameraSettings(sl::CAMERA_SETTINGS_EXPOSURE, -1, true);
-
-
+    
     // bounding box marker
 
 
@@ -333,6 +380,10 @@ ZEDManager::ZEDManager():nh("~"),it(nh) {
         exit(-1);
     }
 
+	ZED.setDepthMaxRangeValue(max_depth);
+    //ZED.disableSpatialMapping();
+    ZED.setCameraSettings(sl::CAMERA_SETTINGS_EXPOSURE, -1, true);
+
 
     width=ZED.getResolution().width;
     height=ZED.getResolution().height;
@@ -341,6 +392,23 @@ ZEDManager::ZEDManager():nh("~"),it(nh) {
     rgb_raw=cv::Mat(cvSize,CV_8UC3);
 
 
+}
+
+
+void ZEDManager::base_frame_pose_callback(const geometry_msgs::PoseStampedConstPtr& msg){
+	
+	// base frame update 
+	base_frame_pose=*msg;
+	tf::Vector3 origin(base_frame_pose.pose.position.x,base_frame_pose.pose.position.y,base_frame_pose.pose.position.z);
+	tf::Quaternion q(base_frame_pose.pose.orientation.x,base_frame_pose.pose.orientation.y,base_frame_pose.pose.orientation.z,base_frame_pose.pose.orientation.w);
+	tf::Transform w2b(q,origin);
+
+
+	w2c=w2b*b2c; // world 2 camera
+	//std::cout<<"[ "<<w2c.getOrigin().x()<<", "<<w2c.getOrigin().y()<<", "<<w2c.getOrigin().z<<" ]"<<std::endl;
+	broadcaster.sendTransform(tf::StampedTransform(w2c, ros::Time::now(),world_frame_id,camera_frame_id ));
+	
+	callback = true ;	
 }
 
 void ZEDManager::retrieve() {
@@ -358,7 +426,7 @@ void ZEDManager::retrieve() {
 };
 
 void ZEDManager::publishPointCloud() {
-
+		
     point_cloud.width = width;
     point_cloud.height = height;
     int size = width * height;
@@ -384,7 +452,7 @@ void ZEDManager::publishPointCloud() {
 
 
 void ZEDManager::publishRGB() {
-    pub_raw_rgb.publish(imageToROSmsg(rgb_raw, sensor_msgs::image_encodings::BGR8, camera_frame_id, ros::Time::now()));
+    //pub_raw_rgb.publish(imageToROSmsg(rgb_raw, sensor_msgs::image_encodings::BGR8, camera_frame_id, ros::Time::now()));
     pub_detected_rgb.publish(imageToROSmsg(rgb_detected, sensor_msgs::image_encodings::BGR8, camera_frame_id, ros::Time::now()));
 }
 
@@ -403,17 +471,19 @@ void ZEDManager::tracking_update(){
             imgThresholded); //Threshold the image
 
     //morphological opening (remove small objects from the foreground)
+ /** 
     erode(imgThresholded, imgThresholded, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
     dilate(imgThresholded, imgThresholded, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
-
+**/
+/**
     //morphological closing (fill small holes in the foreground)
     dilate(imgThresholded, imgThresholded, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
     erode(imgThresholded, imgThresholded, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
-
-
-    //imshow("Thresholded Image", imgThresholded); //show the thresholded image
-    //waitKey(3);
-
+**/
+    if(HSV_tuning){
+    imshow("Thresholded Image", imgThresholded); //show the thresholded image
+    waitKey(1);
+   	}
 
     // bounding box
 
@@ -440,10 +510,10 @@ void ZEDManager::tracking_update(){
 
 
     // margin
-    point1.x = min_x+10;
-    point1.y = min_y+10;
-    point2.x = max_x-10;
-    point2.y = max_y-10;
+    point1.x = min_x;
+    point1.y = min_y;
+    point2.x = max_x;
+    point2.y = max_y;
 
 
     // applying rectangle
@@ -477,22 +547,39 @@ void ZEDManager::get_target_pos(){
         z = sum_z / N_pixel;
 
         if (x == x && y == y && z == z) {
-            // world 2 zed
-            tf::StampedTransform w2c;
-
-            listener.lookupTransform(world_frame_id, camera_frame_id, ros::Time(0), w2c);
-            tf::Vector3 target_pos = w2c * tf::Vector3(x, y, z);
+           
+				
+		
+			tf::Vector3 target_pos = w2c * tf::Vector3(x, y, z);
 
             target_position.x=target_pos.x();
             target_position.y=target_pos.y();
             target_position.z=target_pos.z();
 
+			
+			std::vector<double> target_pos_vec;
+
+			target_pos_vec.push_back(target_position.x);
+			target_pos_vec.push_back(target_position.y);
+			target_pos_vec.push_back(target_position.z);
+			
+			filter.buffer_insert(target_pos_vec);
+	
+
+			std::vector<double> filter_out=filter.filter_output();
+			target_position_filtered.x=filter_out[0];
+			target_position_filtered.y=filter_out[1];
+			target_position_filtered.z=filter_out[2];
+			
+			/**
 
             tf::Transform transform;
-            transform.setOrigin( tf::Vector3(target_pos.x(), target_pos.y(), target_pos.z()));
+            transform.setOrigin( tf::Vector3(target_position_filtered.x, target_position_filtered.y, target_position_filtered.z));
             transform.setRotation(tf::Quaternion(0,0,0,1));
-            broadcaster.sendTransform(tf::StampedTransform(transform, ros::Time::now(),world_frame_id, target_frame_id ));
-            // global coordinates
+			
+			broadcaster.sendTransform(tf::StampedTransform(transform, ros::Time::now(),world_frame_id, target_frame_id ));
+            **/
+			// global coordinates
         }
     }
     else
@@ -504,8 +591,7 @@ void ZEDManager::publishMarker() {
     BBMarker.pose.position=target_position;
     marker_pub.publish(BBMarker);
 
-}
-
+} 
 
 
 
